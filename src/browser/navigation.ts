@@ -6,7 +6,11 @@ import { type SectionMap, type SectionItem, type SidResolution, resolveSidFromMa
 
 let cachedMap: SectionMap | null = null;
 const SECTION_CACHE_TTL_MS = 300_000;
-const NAV_TIMEOUT_MS = 20_000;
+/** Page swaps over a slow link or a Cloudflare check can take a while; override with FREETAXUSA_NAV_TIMEOUT_MS. */
+const NAV_TIMEOUT_MS = (() => {
+  const n = Number(process.env.FREETAXUSA_NAV_TIMEOUT_MS);
+  return Number.isInteger(n) && n >= 5_000 && n <= 300_000 ? n : 30_000;
+})();
 
 /**
  * The sidebar is a row of Bootstrap dropdowns. Each group's wrapper carries the

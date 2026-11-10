@@ -17,7 +17,20 @@ import {
 import { fillFieldsSchema, fillFields, clickButtonSchema, clickButton } from './tools/generic.js';
 import { fillTaxpayerInfoSchema, fillTaxpayerInfo, fillFilingStatusSchema, fillFilingStatus } from './tools/personal.js';
 import { getTaxSummarySchema, getTaxSummary, getRefundEstimateSchema, getRefundEstimate } from './tools/overview.js';
-import { filterPII } from './security/pii-filter.js';
+import { filterPII, redactPII } from './security/pii-filter.js';
+
+const MAX_ERROR_MESSAGE = 200;
+
+/**
+ * First line of an error message only, capped in length. Playwright errors
+ * append a multi-line call log with selectors and page state; that stays in
+ * the server log.
+ */
+export function summarizeError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  const firstLine = raw.split('\n')[0].trim() || 'Unexpected error';
+  return firstLine.length > MAX_ERROR_MESSAGE ? `${firstLine.slice(0, MAX_ERROR_MESSAGE)}…` : firstLine;
+}
 
 type ToolHandler = (args: Record<string, unknown>) => Promise<Record<string, unknown>>;
 
@@ -30,7 +43,11 @@ export function createServer(): McpServer {
         const result = await handler(args);
         return { content: [{ type: 'text' as const, text: JSON.stringify(filterPII(result), null, 2) }] };
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        // Full detail (Playwright call logs, selectors, stack) goes to stderr
+        // for the operator; the client only gets a short, redacted summary.
+        const raw = err instanceof Error ? (err.stack ?? err.message) : String(err);
+        process.stderr.write(`[freetaxusa-mcp] tool error: ${redactPII(raw)}\n`);
+        const message = summarizeError(err);
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(filterPII({ success: false, error: 'internal_error', message }), null, 2) }],
           isError: true,
@@ -43,7 +60,10 @@ export function createServer(): McpServer {
     'login_manual',
     'Open FreeTaxUSA in the visible browser for the user to sign in by hand. Never ask the user for their password. Returns waiting_for_user if they are still signing in; call again after they finish.',
     loginManualSchema.shape,
-    wrap(() => loginManual()),
+    wrap(args => {
+      loginManualSchema.parse(args);
+      return loginManual();
+    }),
   );
 
   server.tool(
@@ -53,7 +73,7 @@ export function createServer(): McpServer {
     wrap(args => logout(logoutSchema.parse(args))),
   );
 
-  server.tool('get_session_status', 'Check whether the FreeTaxUSA session is active and which tax year and section is loaded.', getSessionStatusSchema.shape, wrap(() => getSessionStatus()));
+  server.tool('get_session_status', 'Check whether the FreeTaxUSA session is active and which tax year and section is loaded.', getSessionStatusSchema.shape, wrap(args => { getSessionStatusSchema.parse(args); return getSessionStatus(); }));
 
   server.tool('list_sections', 'List the sections discovered in the FreeTaxUSA sidebar with their SID numbers.', listSectionsSchema.shape, wrap(args => listSections(listSectionsSchema.parse(args))));
 
@@ -69,7 +89,7 @@ export function createServer(): McpServer {
 
   server.tool('expect_page', 'Check that the current page heading or title contains the given text. Use before filling fields.', expectPageSchema.shape, wrap(args => expectPage(expectPageSchema.parse(args))));
 
-  server.tool('read_current_page', 'Read all form fields and their values on the current FreeTaxUSA page.', readCurrentPageSchema.shape, wrap(() => readCurrentPage()));
+  server.tool('read_current_page', 'Read all form fields and their values on the current FreeTaxUSA page.', readCurrentPageSchema.shape, wrap(args => { readCurrentPageSchema.parse(args); return readCurrentPage(); }));
 
   server.tool(
     'fill_fields',
@@ -85,7 +105,7 @@ export function createServer(): McpServer {
     wrap(args => clickButton(clickButtonSchema.parse(args))),
   );
 
-  server.tool('save_and_continue', 'Submit the current FreeTaxUSA page and advance to the next page. Refuses on filing and payment pages.', saveAndContinueSchema.shape, wrap(() => saveAndContinue()));
+  server.tool('save_and_continue', 'Submit the current FreeTaxUSA page and advance to the next page. Refuses on filing and payment pages.', saveAndContinueSchema.shape, wrap(args => { saveAndContinueSchema.parse(args); return saveAndContinue(); }));
 
   server.tool(
     'fill_taxpayer_info',
@@ -101,9 +121,9 @@ export function createServer(): McpServer {
     wrap(args => fillFilingStatus(fillFilingStatusSchema.parse(args))),
   );
 
-  server.tool('get_tax_summary', 'Navigate to the summary page and read refund or amount owed, AGI and filing status. Confirm figures in the browser.', getTaxSummarySchema.shape, wrap(() => getTaxSummary()));
+  server.tool('get_tax_summary', 'Navigate to the summary page and read refund or amount owed, AGI and filing status. Confirm figures in the browser.', getTaxSummarySchema.shape, wrap(args => { getTaxSummarySchema.parse(args); return getTaxSummary(); }));
 
-  server.tool('get_refund_estimate', 'Read the running federal and state refund or amount owed from the current page. Confirm figures in the browser.', getRefundEstimateSchema.shape, wrap(() => getRefundEstimate()));
+  server.tool('get_refund_estimate', 'Read the running federal and state refund or amount owed from the current page. Confirm figures in the browser.', getRefundEstimateSchema.shape, wrap(args => { getRefundEstimateSchema.parse(args); return getRefundEstimate(); }));
 
   return server;
 }

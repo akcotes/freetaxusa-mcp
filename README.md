@@ -67,9 +67,10 @@ claude mcp add --scope user --transport stdio freetaxusa \
 | Variable | Default | |
 | --- | --- | --- |
 | `FREETAXUSA_HEADLESS` | `true` | Set to `false`. Sign-in needs a window. |
-| `FREETAXUSA_TAX_YEAR` | `2025` | Which year's return to open |
+| `FREETAXUSA_TAX_YEAR` | `2025` | Which year's return to open (four digits; anything else is rejected) |
 | `FREETAXUSA_USER_DATA_DIR` | `~/.freetaxusa-mcp/browser-profile/` | Chrome profile for this tool, separate from your normal one |
-| `FREETAXUSA_CHROME_PATH` | the standard install location | Path to Chrome if it lives somewhere else |
+| `FREETAXUSA_CHROME_PATH` | first standard Chrome / Beta / Dev / Canary install found | Path to Chrome if it lives somewhere else |
+| `FREETAXUSA_NAV_TIMEOUT_MS` | `30000` | How long to wait for a page change (5000–300000) |
 
 ## Using it
 

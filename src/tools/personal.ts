@@ -76,17 +76,17 @@ async function firstMatch(labels: string[], value: string, kind: FieldKind = 'au
 }
 
 export const fillTaxpayerInfoSchema = z.object({
-  firstName: z.string().min(1).describe('First name'),
-  lastName: z.string().min(1).describe('Last name'),
+  firstName: z.string().min(1).max(100).describe('First name'),
+  lastName: z.string().min(1).max(100).describe('Last name'),
   middleInitial: z.string().max(1).optional().describe('Middle initial'),
-  suffix: z.string().optional().describe('Suffix (Jr, Sr, II-VI)'),
+  suffix: z.string().max(20).optional().describe('Suffix (Jr, Sr, II-VI)'),
   ssn: z.string().regex(/^\d{3}-?\d{2}-?\d{4}$/).describe('Social Security Number (XXX-XX-XXXX)'),
   dob: z.string().regex(/^\d{2}\/\d{2}\/\d{4}$/).describe('Date of birth (MM/DD/YYYY)'),
-  occupation: z.string().min(1).describe('Occupation'),
+  occupation: z.string().min(1).max(100).describe('Occupation'),
   address: z.object({
-    street: z.string().min(1).describe('Street address'),
-    apt: z.string().optional().describe('Apartment number'),
-    city: z.string().min(1).describe('City'),
+    street: z.string().min(1).max(100).describe('Street address'),
+    apt: z.string().max(20).optional().describe('Apartment number'),
+    city: z.string().min(1).max(100).describe('City'),
     state: z.string().length(2).describe('State code (e.g., PA)'),
     zip: z.string().regex(/^\d{5}$/).describe('ZIP code'),
     zip4: z.string().regex(/^\d{4}$/).optional().describe('ZIP+4'),
