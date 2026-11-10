@@ -154,4 +154,29 @@ describe('redactPII edge cases', () => {
     const once = redactPII('SSN 123-45-6789, acct 1234567890, EIN 12-3456789');
     expect(redactPII(once)).toBe(once);
   });
+
+  describe('edge cases', () => {
+    it('masks an SSN once, not again as an EIN', () => {
+      expect(redactPII('123-45-6789')).toBe('***-**-6789');
+    });
+
+    it('masks digits glued to letters', () => {
+      expect(redactPII('SSN123456789')).toBe('SSN***-**-6789');
+      expect(redactPII('EIN12-3456789x')).toBe('EIN**-***6789x');
+    });
+
+    it('masks dotted SSNs and space-separated EINs', () => {
+      expect(redactPII('123.45.6789')).toBe('***-**-6789');
+      expect(redactPII('EIN 12 3456789')).toBe('EIN **-***6789');
+    });
+
+    it('masks digit runs longer than 17', () => {
+      expect(redactPII('acct 123456789012345678901')).toBe('acct ****8901');
+    });
+
+    it('leaves phone numbers and dollar amounts alone', () => {
+      expect(redactPII('555-123-4567')).toBe('555-123-4567');
+      expect(redactPII('$52,340.00')).toBe('$52,340.00');
+    });
+  });
 });

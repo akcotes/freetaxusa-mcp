@@ -5,7 +5,21 @@ import { homedir, platform } from 'node:os';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 
 const DEFAULT_USER_DATA_DIR = resolve(homedir(), '.freetaxusa-mcp', 'browser-profile');
-const TAX_YEAR = process.env.FREETAXUSA_TAX_YEAR ?? '2025';
+
+/**
+ * The tax year is interpolated into every FreeTaxUSA URL, so only accept a
+ * plain four-digit year. Anything else (a path, a host, a query string) would
+ * let a tampered environment point the browser somewhere other than FreeTaxUSA.
+ */
+export function parseTaxYear(raw: string | undefined): string {
+  const year = (raw ?? '2025').trim();
+  if (!/^20\d{2}$/.test(year)) {
+    throw new Error(`FREETAXUSA_TAX_YEAR must be a four-digit year like 2025 (got ${JSON.stringify(raw)})`);
+  }
+  return year;
+}
+
+const TAX_YEAR = parseTaxYear(process.env.FREETAXUSA_TAX_YEAR);
 
 export const BASE_URL = `https://www.freetaxusa.com/taxes${TAX_YEAR}/taxcontrol`;
 export const AUTH_URL = `https://auth.freetaxusa.com/?PRMPT&appYear=${TAX_YEAR}`;
@@ -40,22 +54,39 @@ export function getUserDataDir(): string {
 function ensureUserDataDir(): string {
   const dir = getUserDataDir();
   if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-    chmodSync(dir, 0o700);
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
+  // Enforce owner-only access on every start, not just on creation: the
+  // profile holds the session cookies, and a pre-existing directory may have
+  // been created with a looser umask.
+  chmodSync(dir, 0o700);
   return dir;
 }
 
+const CHROME_CANDIDATES: Record<string, string[]> = {
+  darwin: [
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    join(homedir(), 'Applications/Google Chrome.app/Contents/MacOS/Google Chrome'),
+    '/Applications/Google Chrome Beta.app/Contents/MacOS/Google Chrome Beta',
+    '/Applications/Google Chrome Dev.app/Contents/MacOS/Google Chrome Dev',
+    '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
+  ],
+  win32: [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    join(process.env.LOCALAPPDATA ?? '', 'Google\\Chrome\\Application\\chrome.exe'),
+  ],
+  linux: ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/google-chrome-beta', '/opt/google/chrome/chrome'],
+};
+
+/**
+ * The installed Google Chrome, not Playwright's bundled Chromium (which trips
+ * the sign-in bot checks). Set FREETAXUSA_CHROME_PATH to override.
+ */
 function chromeExecutable(): string {
   if (process.env.FREETAXUSA_CHROME_PATH) return process.env.FREETAXUSA_CHROME_PATH;
-  switch (platform()) {
-    case 'darwin':
-      return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-    case 'win32':
-      return 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-    default:
-      return 'google-chrome';
-  }
+  const candidates = CHROME_CANDIDATES[platform()] ?? [];
+  return candidates.find(p => existsSync(p)) ?? candidates[0] ?? 'google-chrome';
 }
 
 function devToolsPortFile(): string {

@@ -5,18 +5,23 @@ import { waitForPageChange } from '../browser/navigation.js';
 import { guardPage, isPaymentField, isDangerousButton } from '../security/guards.js';
 import { sessionExpiredResult } from './session.js';
 
+/** Longest value any FreeTaxUSA input accepts is well under this; it stops runaway input. */
+export const MAX_FIELD_VALUE_LENGTH = 500;
+export const MAX_FIELDS_PER_CALL = 100;
+
 const fieldKind = z.enum(['auto', 'text', 'select', 'radio', 'checkbox']);
 
 export const fillFieldsSchema = z.object({
   fields: z
     .array(
       z.object({
-        label: z.string().min(1).describe('Field label as shown by read_current_page. For a radio group, the question; the option goes in value.'),
-        value: z.string().describe('Value to enter. For checkbox or radio use "true"/"false".'),
+        label: z.string().min(1).max(MAX_FIELD_VALUE_LENGTH).describe('Field label as shown by read_current_page. For a radio group, the question; the option goes in value.'),
+        value: z.string().max(MAX_FIELD_VALUE_LENGTH).describe('Value to enter. For checkbox or radio use "true"/"false".'),
         kind: fieldKind.optional().describe('Field kind. Defaults to "auto", which detects the element type.'),
       }),
     )
-    .min(1),
+    .min(1)
+    .max(MAX_FIELDS_PER_CALL),
 });
 
 export async function fillFields(input: z.infer<typeof fillFieldsSchema>): Promise<Record<string, unknown>> {
@@ -60,10 +65,11 @@ export async function fillFields(input: z.infer<typeof fillFieldsSchema>): Promi
 }
 
 export const clickButtonSchema = z.object({
-  name: z.string().min(1).describe('Button or link text, e.g. "Add a W-2", "Edit", "Delete", "Back"'),
+  name: z.string().min(1).max(200).describe('Button or link text, e.g. "Add a W-2", "Edit", "Delete", "Back"'),
   context: z
     .string()
     .min(1)
+    .max(200)
     .optional()
     .describe('When the same button text appears in several rows, the heading of the row wanted, e.g. "Investments and Savings"'),
 });

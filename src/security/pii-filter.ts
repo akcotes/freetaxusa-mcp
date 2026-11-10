@@ -4,14 +4,21 @@
  * Applied to every string returned by any tool before reaching MCP transport.
  */
 
-/** Matches SSN patterns: 123-45-6789, 123 45 6789, 123456789 */
-const SSN_PATTERN = /\b(\d{3})[-\s]?(\d{2})[-\s]?(\d{4})\b/g;
+/*
+ * Patterns are bounded by digit lookarounds rather than \b, so a number glued
+ * to letters ("SSN123456789", "EIN12-3456789") is still caught, and a 9-digit
+ * run is consumed whole by the SSN pattern before the EIN pattern can see any
+ * part of it. They err toward over-redaction: a stray 9-digit run is masked.
+ */
 
-/** Matches bank account numbers (8-17 digits) */
-const ACCOUNT_PATTERN = /\b(\d{4})(\d{4,13})\b/g;
+/** Matches SSN patterns: 123-45-6789, 123 45 6789, 123.45.6789, 123456789 */
+const SSN_PATTERN = /(?<!\d)(\d{3})[-.\s]?(\d{2})[-.\s]?(\d{4})(?!\d)/g;
 
-/** Matches EIN patterns: 12-3456789 */
-const EIN_PATTERN = /\b(\d{2})-?(\d{7})\b/g;
+/** Matches bank account numbers and any other run of 8 or more digits */
+const ACCOUNT_PATTERN = /(?<!\d)(\d{8,})(?!\d)/g;
+
+/** Matches EIN patterns: 12-3456789, 12 3456789 (a bare 9-digit run is already masked as an SSN) */
+const EIN_PATTERN = /(?<!\d)(\d{2})[-\s]?(\d{7})(?!\d)/g;
 
 /**
  * Redact SSNs to ***-**-NNNN format (last 4 visible).
@@ -27,11 +34,7 @@ export function redactSSN(text: string): string {
  * Only applies to sequences of 8+ digits.
  */
 export function redactAccountNumber(text: string): string {
-  return text.replace(ACCOUNT_PATTERN, (_match, _prefix, rest: string) => {
-    const full = _prefix + rest;
-    if (full.length < 8) return full;
-    return `****${full.slice(-4)}`;
-  });
+  return text.replace(ACCOUNT_PATTERN, (full: string) => `****${full.slice(-4)}`);
 }
 
 /**
